@@ -51,10 +51,8 @@ class CommitTracker:
                         # Skip empty repositories silently
                         try:
                             repo.get_commits().get_page(0)
-                        except Exception as e:
-                            if "Git Repository is empty" in str(e):
-                                continue
-                            raise e
+                        except:  # Catch and ignore all exceptions for empty repos
+                            continue
                         
                         # Check for commits
                         commits = repo.get_commits(author=self.username, since=start_date)
@@ -134,23 +132,18 @@ class CommitTracker:
             instruction = (
                 "You are a technical writer. Based on the following git commit messages, "
                 "create a concise bulleted summary of the main changes. Group related changes together "
-                "and focus on the key technical updates. Format in markdown with these requirements:\n\n"
-                f"Past {weeks_past} Week{'s' if weeks_past != 1 else ''} "
-                f"({start_date.strftime('%m/%d/%y')}–{end_date.strftime('%m/%d/%y')}):\n"
-                "__Past Period__\n"
+                "and focus on the key technical updates. Format exactly like this example:\n\n"
+                "**Past Period (MM/DD/YY–MM/DD/YY)**\n"
                 "- **Project Name**\n"
                 "  - Key accomplishment 1\n"
                 "  - Key accomplishment 2\n\n"
-                f"Next {weeks_future} Week{'s' if weeks_future != 1 else ''} "
-                f"({end_date.strftime('%m/%d/%y')}–{next_period_end.strftime('%m/%d/%y')}):\n"
-                "__Next Period__\n"
-                "- **Project Name**\n"
-                "  - Planned task 1\n"
-                "  - Planned task 2\n\n"
-                "__Backburner__ (low priority):\n"
-                "- **Project Name**:\n"
-                "  - Future consideration 1\n"
-                "  - Future consideration 2\n\n"
+                "**Next Period (MM/DD/YY–MM/DD/YY)**\n"
+                "- No specific tasks mentioned in the commit messages.\n\n"
+                "**Backburner (low priority)**\n"
+                "- No specific tasks mentioned in the commit messages.\n\n"
+                f"Use these date ranges:\n"
+                f"Past Period: {start_date.strftime('%m/%d/%y')}–{end_date.strftime('%m/%d/%y')}\n"
+                f"Next Period: {end_date.strftime('%m/%d/%y')}–{next_period_end.strftime('%m/%d/%y')}\n\n"
                 f"Commit messages:\n{commit_text}"
             )
 
@@ -191,8 +184,7 @@ class CommitTracker:
             # Create message with plain text
             email_body = (
                 f"{stats_text}\n\n"
-                f"Development Summary\n"
-                f"{'=' * 80}\n\n"
+                f"Activity Summary\n\n"
                 f"{summary_text}"
             )
             
@@ -245,6 +237,12 @@ class CommitTracker:
                 
                 for repo in org.get_repos():
                     try:
+                        # Skip empty repositories silently
+                        try:
+                            repo.get_commits().get_page(0)
+                        except:  # Catch and ignore all exceptions for empty repos
+                            continue
+                            
                         # Get commits
                         commits = repo.get_commits(author=self.username, since=start_date)
                         commit_count = sum(1 for _ in commits)
@@ -271,12 +269,10 @@ class CommitTracker:
                             stats[org_name]['total_issues'] += issue_count
                             stats[org_name]['total_comments'] += comment_count
                             
-                    except Exception as e:
-                        print(f"Error accessing {repo.name}: {str(e)}")
+                    except:  # Silently ignore all repository access errors
                         continue
                         
-            except Exception as e:
-                print(f"Error accessing organization {org_name}: {str(e)}")
+            except:  # Silently ignore all organization access errors
                 continue
                 
         return stats
@@ -308,9 +304,12 @@ class CommitTracker:
         
         if active_repos:
             output.append("\nActive Repositories:")
-            output.append(", ".join(active_repos))
+            output.extend(active_repos)  # Each repo on its own line
+            
             output.append(f"\nActivity Totals:")
-            output.append(f"Commits: {total_commits}, Issues: {total_issues}, Comments: {total_comments}")
+            output.append(f"Commits: {total_commits}")
+            output.append(f"Issues: {total_issues}")
+            output.append(f"Comments: {total_comments}")
             output.append(f"Total Activity: {total_commits + total_issues + total_comments}")
         else:
             output.append("\nNo activity found in the specified time period.")
