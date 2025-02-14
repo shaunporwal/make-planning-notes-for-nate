@@ -133,14 +133,21 @@ class CommitTracker:
                 "You are a technical writer. Based on the following git commit messages, "
                 "create a concise bulleted summary of the main changes. Group related changes together "
                 "and focus on the key technical updates. Format exactly like this example:\n\n"
-                "**Past Period (MM/DD/YY–MM/DD/YY)**\n"
-                "- **Project Name**\n"
+                "Past Period (MM/DD/YY–MM/DD/YY)\n\n"
+                "- Project Name 1\n\n"
                 "  - Key accomplishment 1\n"
                 "  - Key accomplishment 2\n\n"
-                "**Next Period (MM/DD/YY–MM/DD/YY)**\n"
-                "- Key next step or accomplishment\n"
-                "- Key next step or accomplishment 2\n\n"
-                "**Backburner (low priority)**\n"
+                "- Project Name 2\n\n"
+                "  - Key accomplishment 1\n"
+                "  - Key accomplishment 2\n\n"
+                "Next Period (MM/DD/YY–MM/DD/YY)\n\n"
+                "- Project Name 1\n\n"
+                "  - Key accomplishment 1\n"
+                "  - Key accomplishment 2\n\n"
+                "- Project Name 2\n\n"
+                "  - Key accomplishment 1\n"
+                "  - Key accomplishment 2\n\n"
+                "Backburner (low priority)\n\n"
                 "- Task that needs to be done, but not immediately\n\n"
                 f"Use these date ranges:\n"
                 f"Past Period: {start_date.strftime('%m/%d/%y')}–{end_date.strftime('%m/%d/%y')}\n"
@@ -304,10 +311,10 @@ class CommitTracker:
                     total_comments += repo_data['comments']
         
         if active_repos:
-            output.append("\nActive Repositories:")
+            output.append("Active Repositories:\n")
             output.extend(active_repos)  # Each repo on its own line
             
-            output.append(f"\nActivity Totals:")
+            output.append(f"\nActivity Totals:\n")
             output.append(f"Commits: {total_commits}")
             output.append(f"Issues: {total_issues}")
             output.append(f"Comments: {total_comments}")
