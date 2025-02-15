@@ -8,16 +8,16 @@ Generate activity summaries from GitHub commits:
 
 ```bash
 # Basic usage - look back 2 weeks and forward 2 weeks
-uv run src/get_python_commits.py -u <github_username>
+uv run src/get_commit_summary.py -u <github_username>
 
 # Custom time periods
-uv run src/get_python_commits.py -u <github_username> -wp 1 -wf 2  # 1 week past, 2 weeks future
+uv run src/get_commit_summary.py -u <github_username> -wp 1 -wf 2  # 1 week past, 2 weeks future
 
 # Send email summary
-uv run src/get_python_commits.py -u <github_username> -e user@mskcc.org
+uv run src/get_commit_summary.py -u <github_username> -e user@mskcc.org
 
 # Display summary in console
-uv run src/get_python_commits.py -u <github_username> -d
+uv run src/get_commit_summary.py -u <github_username> -d
 ```
 
 Requires:
