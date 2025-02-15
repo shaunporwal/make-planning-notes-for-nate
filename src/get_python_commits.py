@@ -132,7 +132,8 @@ class CommitTracker:
             instruction = (
                 "You are a technical writer. Based on the following git commit messages, "
                 "create a concise bulleted summary of the main changes. Group related changes together "
-                "and focus on the key technical updates. Format exactly like this example:\n\n"
+                "and focus on the key technical updates. For the next period section, please "
+                "look for clues in the past commits on what is coming up next. Format exactly like this example:\n\n"
                 "Past Period (MM/DD/YY–MM/DD/YY)\n\n"
                 "- Project Name 1\n\n"
                 "  - Key accomplishment 1\n"
@@ -147,8 +148,6 @@ class CommitTracker:
                 "- Project Name 2\n\n"
                 "  - Key accomplishment 1\n"
                 "  - Key accomplishment 2\n\n"
-                "Backburner (low priority)\n\n"
-                "- Task that needs to be done, but not immediately\n\n"
                 f"Use these date ranges:\n"
                 f"Past Period: {start_date.strftime('%m/%d/%y')}–{end_date.strftime('%m/%d/%y')}\n"
                 f"Next Period: {end_date.strftime('%m/%d/%y')}–{next_period_end.strftime('%m/%d/%y')}\n\n"
@@ -189,12 +188,8 @@ class CommitTracker:
             if not sender_email:
                 raise ValueError("MSK email not found in environment variables")
 
-            # Create message with plain text
-            email_body = (
-                f"{stats_text}\n\n"
-                f"Activity Summary\n\n"
-                f"{summary_text}"
-            )
+            # Create message with plain text - only include summary
+            email_body = summary_text
             
             msg = MIMEText(email_body)
             msg['Subject'] = f"Activity Update - {datetime.now().strftime('%Y-%m-%d')}"
