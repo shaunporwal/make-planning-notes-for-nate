@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import sys
 from datetime import datetime, timedelta
 import pytz
-import ollama
+import openai
 import argparse
 import smtplib
 from email.mime.text import MIMEText
@@ -20,12 +20,14 @@ class CommitTracker:
         """Initialize GitHub connection with error handling"""
         load_dotenv()
         token = os.getenv("GITHUB_ACCESS_TOKEN")
+        enterprise_url = os.getenv("GITHUB_ENTERPRISE_URL")
         
         if not token:
             raise ValueError("No GitHub access token found in environment variables")
+        if not enterprise_url:
+            raise ValueError("No GitHub enterprise URL found in environment variables")
             
         try:
-            enterprise_url = "https://github.mskcc.org/api/v3"
             g = Github(base_url=enterprise_url, login_or_token=token)
             # Test connection
             g.get_user()
@@ -113,7 +115,7 @@ class CommitTracker:
         return formatted_output
 
     def generate_commit_summary(self, weeks_past=2, weeks_future=2):
-        """Generate a bulleted summary of commits using Ollama."""
+        """Generate a bulleted summary of commits using OpenAI."""
         try:
             # Get the raw commits first
             commits = self.get_activity(weeks_back=weeks_past)
@@ -128,7 +130,10 @@ class CommitTracker:
             start_date = end_date - timedelta(weeks=weeks_past)
             next_period_end = end_date + timedelta(weeks=weeks_future)
 
-            # Create the instruction for Ollama
+            # Initialize OpenAI client
+            client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            
+            # Create the instruction
             instruction = (
                 "You are a technical writer. Based on the following git commit messages, "
                 "create a concise bulleted summary of the main changes. Group related changes together "
@@ -154,20 +159,14 @@ class CommitTracker:
                 f"Commit messages:\n{commit_text}"
             )
 
-            # Initialize Ollama client
-            import ollama
-            ollama.BASE_URL = "http://localhost:11434"
-
-            # Call the Ollama API
-            response = ollama.chat(
-                model='llama3.1:70b',
+            # Call the OpenAI API with new syntax
+            response = client.chat.completions.create(
+                model="gpt-4",
                 messages=[{'role': 'user', 'content': instruction}],
-                stream=True
+                temperature=0.7
             )
             
-            stream = [chunk['message']['content'] for chunk in response]
-            summary = "".join(stream)
-            
+            summary = response.choices[0].message.content
             return summary.strip()
 
         except Exception as e:
@@ -175,49 +174,85 @@ class CommitTracker:
             return "Error generating summary."
 
     def send_email(self, stats_text, summary_text, recipients=None):
-        """Send the commit summary via MSK SMTP."""
+        """Send the commit summary via email."""
         try:
-            # MSK SMTP settings - using IP address instead of hostname
-            smtp_servers = [
-                ("outbound-smtp.mskcc.org", 25),
-                ("10.35.0.47", 25),  # MSK SMTP IP address
-                ("localhost", 25)
-            ]
-            sender_email = os.getenv("MSK_EMAIL")
+            if not recipients:
+                raise ValueError("No recipients specified")
 
-            if not sender_email:
-                raise ValueError("MSK email not found in environment variables")
-
-            # Create message with plain text - only include summary
-            email_body = summary_text
+            # Separate MSK and external recipients
+            msk_recipients = [r for r in recipients if "@mskcc.org" in r.lower()]
+            external_recipients = [r for r in recipients if "@mskcc.org" not in r.lower()]
             
-            msg = MIMEText(email_body)
-            msg['Subject'] = f"Activity Update - {datetime.now().strftime('%Y-%m-%d')}"
-            msg['From'] = sender_email
-            msg['To'] = "; ".join(recipients) if recipients else sender_email
-
-            # Try multiple SMTP configurations
-            errors = []
+            success = True
             
-            for smtp_server, smtp_port in smtp_servers:
+            # Handle MSK recipients
+            if msk_recipients:
                 try:
-                    with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
-                        server.set_debuglevel(0)  # Disable debug output
-                        server.send_message(msg)
-                        print(f"Email sent to {msg['To']} successfully!")
-                        return True
-                except socket.gaierror as e:
-                    errors.append(f"DNS resolution error for {smtp_server}")
-                except ConnectionRefusedError as e:
-                    errors.append(f"Connection refused by {smtp_server}")
-                except Exception as e:
-                    errors.append(f"Error with {smtp_server}")
+                    # MSK SMTP settings
+                    smtp_servers = [
+                        (os.getenv("SMTP_SERVER"), int(os.getenv("SMTP_PORT", "25"))),
+                        (os.getenv("SMTP_SERVER_IP"), int(os.getenv("SMTP_PORT", "25"))),
+                        ("localhost", 25)
+                    ]
+                    sender_email = os.getenv("MSK_EMAIL")
 
-            # If we get here, all attempts failed
-            print("\nFailed to send email:")
-            for error in errors:
-                print(f"- {error}")
-            return False
+                    if not sender_email:
+                        raise ValueError("MSK email not found in environment variables")
+
+                    msg = MIMEText(summary_text)
+                    msg['Subject'] = f"Activity Update - {datetime.now().strftime('%Y-%m-%d')}"
+                    msg['From'] = sender_email
+                    msg['To'] = "; ".join(msk_recipients)
+
+                    # Try MSK SMTP servers
+                    sent = False
+                    errors = []
+                    for smtp_server, smtp_port in smtp_servers:
+                        try:
+                            with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
+                                server.send_message(msg)
+                                print(f"Email sent to MSK recipients: {msg['To']}")
+                                sent = True
+                                break
+                        except Exception as e:
+                            errors.append(f"Error with {smtp_server}: {str(e)}")
+                    
+                    if not sent:
+                        print("\nFailed to send to MSK recipients:")
+                        for error in errors:
+                            print(f"- {error}")
+                        success = False
+
+                except Exception as e:
+                    print(f"Error sending to MSK recipients: {str(e)}")
+                    success = False
+
+            # Handle external recipients
+            if external_recipients:
+                try:
+                    # Gmail settings
+                    gmail_email = os.getenv("GMAIL_EMAIL")
+                    gmail_password = os.getenv("GMAIL_APP_PASSWORD")
+                    
+                    if gmail_email and gmail_password:
+                        msg = MIMEText(summary_text)
+                        msg['Subject'] = f"Activity Update - {datetime.now().strftime('%Y-%m-%d')}"
+                        msg['From'] = gmail_email
+                        msg['To'] = "; ".join(external_recipients)
+
+                        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                            server.login(gmail_email, gmail_password)
+                            server.send_message(msg)
+                            print(f"Email sent to external recipients: {msg['To']}")
+                    else:
+                        print("Warning: Cannot send to external recipients - Gmail credentials not configured")
+                        success = False
+
+                except Exception as e:
+                    print(f"Error sending to external recipients: {str(e)}")
+                    success = False
+
+            return success
 
         except Exception as e:
             print(f"Error preparing email: {str(e)}")
