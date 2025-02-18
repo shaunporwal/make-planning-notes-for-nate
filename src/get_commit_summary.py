@@ -14,47 +14,38 @@ dotenv_path = os.path.join(os.path.dirname(__file__), '../.env')  # adjust as ne
 load_dotenv(dotenv_path)
 
 class CommitTracker:
-    def __init__(self, username, orgs=None):
+    def __init__(self, username, orgs=None, enterprise=False):
         # Load environment variables
         load_dotenv()
         self.username = username
-        
-        # Check for enterprise settings – treat placeholder or empty as not set
-        enterprise_url = os.getenv("GITHUB_ENTERPRISE_URL")
-        if enterprise_url in [None, "", "your.enterprise.github.api.url"]:
-            enterprise_url = None
-
-        # Set default organizations if none provided: 
-        # * For enterprise, use the team repos ("Amplio", "Amplio-Projects")
-        # * For public GitHub, use the user's account and "juntotechnologies"
-        if orgs is None:
-            if enterprise_url:
+        self.enterprise = enterprise
+        if orgs is not None:
+            self.orgs = orgs
+        else:
+            # If enterprise is enabled, use the enterprise orgs; otherwise, use personal orgs.
+            if self.enterprise:
                 self.orgs = ["Amplio", "Amplio-Projects"]
             else:
                 self.orgs = [username, "juntotechnologies"]
-        else:
-            self.orgs = orgs
-
         self.github = self._initialize_github()
 
     def _initialize_github(self):
         """Initialize GitHub connection with error handling"""
         load_dotenv()
-        enterprise_url = os.getenv("GITHUB_ENTERPRISE_URL")
-        if enterprise_url in [None, "", "your.enterprise.github.api.url"]:
-            enterprise_url = None
-
-        # In enterprise mode, try to get the enterprise token; fallback to GITHUB_ACCESS_TOKEN if needed.
-        if enterprise_url:
+        if self.enterprise:
+            enterprise_url = os.getenv("GITHUB_ENTERPRISE_URL")
+            if enterprise_url in [None, "", "your.enterprise.github.api.url"]:
+                raise ValueError("Enterprise GitHub URL not configured correctly")
             token = os.getenv("GITHUB_ENTERPRISE_ACCESS_TOKEN", os.getenv("GITHUB_ACCESS_TOKEN"))
         else:
+            enterprise_url = None
             token = os.getenv("GITHUB_ACCESS_TOKEN")
         
         if not token:
             raise ValueError("No GitHub access token found in environment variables")
         
         try:
-            if enterprise_url:
+            if self.enterprise:
                 g = Github(base_url=enterprise_url, login_or_token=token)
             else:
                 g = Github(token)
@@ -91,9 +82,10 @@ class CommitTracker:
                         
                         # Get commits authored by the username since the start date.
                         all_commits = repo.get_commits(since=start_date)
+                        commit_emails = {"shaun.porwal@gmail.com", "porwals@mskcc.org"}  # set of allowed emails
                         commits = [
                             commit for commit in all_commits
-                            if commit.commit.author.email.lower() == "shaun.porwal@gmail.com"
+                            if commit.commit.author.email.lower() in commit_emails
                         ]
                         repo_commit_count = 0
                         repo_commits = []
@@ -167,15 +159,20 @@ class CommitTracker:
                 "create a concise bulleted summary of the main changes. Group related changes together "
                 "and focus on the key technical updates. For the next period section, please "
                 "look for clues in the past commits on what is coming up next. Don't mention past "
-                "commits or past work or use the words potential or possible. Format exactly like this example:\n\n"
-                "Past Period (MM/DD/YY–MM/DD/YY)\n\n"
+                "commits or past work or use the words potential or possible. Format exactly like this example. "
+                "Condense the points from the commits, mentioning the high level changes only:\n\n"
+                "--------------------\n"
+                "Past Period (MM/DD/YY–MM/DD/YY)\n"
+                "--------------------\n\n"
                 "- Project Name 1\n\n"
                 "  - Key accomplishment 1\n"
                 "  - Key accomplishment 2\n\n"
                 "- Project Name 2\n\n"
                 "  - Key accomplishment 1\n"
                 "  - Key accomplishment 2\n\n"
-                "Next Period (MM/DD/YY–MM/DD/YY)\n\n"
+                "--------------------\n"
+                "Next Period (MM/DD/YY–MM/DD/YY)\n"
+                "--------------------\n\n"
                 "- Project Name 1\n\n"
                 "  - Key accomplishment 1\n"
                 "  - Key accomplishment 2\n\n"
@@ -200,65 +197,32 @@ class CommitTracker:
 
     def send_email(self, stats_text, summary_text, recipients=None):
         """Send the commit summary via email."""
+        if not recipients:
+            raise ValueError("No recipients specified")
+
+        def create_msg(sender, recipient_list):
+            msg = MIMEText(summary_text)
+            msg['Subject'] = f"Activity Update - {datetime.now().strftime('%Y-%m-%d')}"
+            msg['From'] = sender
+            msg['To'] = ", ".join(recipient_list)
+            return msg
+
+        # Always send emails from Gmail regardless of recipient domain.
+        gmail_email = os.getenv("GMAIL_EMAIL")
+        gmail_password = os.getenv("GMAIL_APP_PASSWORD")
+        if not gmail_email or not gmail_password:
+            print("Warning: Gmail credentials are not configured")
+            return False
+
+        msg = create_msg(gmail_email, recipients)
         try:
-            if not recipients:
-                raise ValueError("No recipients specified")
-            msk_recipients = [r for r in recipients if "@mskcc.org" in r.lower()]
-            external_recipients = [r for r in recipients if "@mskcc.org" not in r.lower()]
-            all_success = True
-
-            def create_msg(sender, recipient_list):
-                msg = MIMEText(summary_text)
-                msg['Subject'] = f"Activity Update - {datetime.now().strftime('%Y-%m-%d')}"
-                msg['From'] = sender
-                msg['To'] = ", ".join(recipient_list)
-                return msg
-
-            msk_email = os.getenv("MSK_EMAIL")
-            if msk_recipients and msk_email:
-                smtp_servers = [
-                    (os.getenv("SMTP_SERVER"), int(os.getenv("SMTP_PORT", "25"))),
-                    (os.getenv("SMTP_SERVER_IP"), int(os.getenv("SMTP_PORT", "25"))),
-                    ("localhost", 25)
-                ]
-                msg = create_msg(msk_email, msk_recipients)
-                sent = False
-                errors = []
-                for smtp_server, smtp_port in smtp_servers:
-                    try:
-                        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
-                            server.send_message(msg)
-                            print(f"Email sent to MSK recipients: {msg['To']}")
-                            sent = True
-                            break
-                    except Exception as e:
-                        errors.append(f"Error with {smtp_server}: {str(e)}")
-                if not sent:
-                    print("Failed to send to MSK recipients:")
-                    for error in errors:
-                        print(f" - {error}")
-                    all_success = False
-            elif msk_recipients:
-                external_recipients.extend(msk_recipients)
-            if external_recipients:
-                gmail_email = os.getenv("GMAIL_EMAIL")
-                gmail_password = os.getenv("GMAIL_APP_PASSWORD")
-                if gmail_email and gmail_password:
-                    msg = create_msg(gmail_email, external_recipients)
-                    try:
-                        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-                            server.login(gmail_email, gmail_password)
-                            server.send_message(msg)
-                            print(f"Email sent to external recipients: {msg['To']}")
-                    except Exception as e:
-                        print(f"Error sending to external recipients: {str(e)}")
-                        all_success = False
-                else:
-                    print("Warning: Cannot send to external recipients - Gmail credentials not configured")
-                    all_success = False
-            return all_success
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                server.login(gmail_email, gmail_password)
+                server.send_message(msg)
+                print(f"Email sent to: {msg['To']}")
+            return True
         except Exception as e:
-            print(f"Error preparing email: {str(e)}")
+            print(f"Error sending email: {str(e)}")
             return False
 
     def get_detailed_stats(self, weeks_back=2):
@@ -284,9 +248,10 @@ class CommitTracker:
                         except:
                             continue
                         all_commits = repo.get_commits(since=start_date)
+                        commit_emails = {"shaun.porwal@gmail.com", "porwals@mskcc.org"}  # set of allowed emails
                         commits = [
                             commit for commit in all_commits
-                            if commit.commit.author.email.lower() == "shaun.porwal@gmail.com"
+                            if commit.commit.author.email.lower() in commit_emails
                         ]
                         commit_count = sum(1 for _ in commits)
                         issues = repo.get_issues(creator=self.username, since=start_date, state='all')
@@ -351,8 +316,9 @@ def main():
         parser.add_argument('-e', '--email', nargs='+', help='Email recipients (optional)')
         parser.add_argument('-v', '--verbose', action='store_true', help='Show detailed output')
         parser.add_argument('-d', '--display', action='store_true', help='Display activity table and summary in console')
+        parser.add_argument('--enterprise', action='store_true', help='Scan enterprise GitHub (MSKCC) for commits')
         args = parser.parse_args()
-        tracker = CommitTracker(username=args.username)
+        tracker = CommitTracker(username=args.username, enterprise=args.enterprise)
         stats = tracker.get_detailed_stats(weeks_back=args.weeks_past)
         stats_text = tracker.format_stats_report(stats, weeks_back=args.weeks_past)
         summary = tracker.generate_commit_summary(weeks_past=args.weeks_past, weeks_future=args.weeks_future)
