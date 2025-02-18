@@ -22,9 +22,8 @@ jobs:
       - name: Sync uv project dependencies
         run: uv sync
 
-      - name: Determine if today is a scheduled fortnight
+      - name: Scheduled Check
         if: github.event_name != 'workflow_dispatch'
-        id: schedule_check
         shell: bash
         run: |
           ref_date="2025-02-19"
@@ -32,31 +31,52 @@ jobs:
           diff_days=$(( ( $(date -d "$current_date" +%s) - $(date -d "$ref_date" +%s) ) / 86400 ))
           echo "Days difference: $diff_days"
           if (( diff_days % 14 != 0 )); then
-            echo "This Wednesday ($current_date) is not scheduled for a summary. Skipping."
+            echo "Not scheduled."
             exit 78
           fi
-          echo "This is a scheduled day for the commit summary."
+          echo "Scheduled run."
 
-      - name: "Debug: Print Time Window and Environment Info"
+      - name: Debug: Time Window
         run: |
-          echo "Current UTC Time: $(python -c 'import datetime, pytz; print(datetime.datetime.now(pytz.UTC))')"
-          echo "Computed Start Date (2 weeks ago): $(python -c 'import datetime, pytz; from datetime import timedelta; print(datetime.datetime.now(pytz.UTC) - timedelta(weeks=2))')"
-          echo "Allowed commit emails: shaun.porwal@gmail.com, porwals@mskcc.org"
-          echo "Enterprise mode organizations: Amplio, Amplio-Projects"
+          echo "UTC Time: $(python -c 'import datetime, pytz; print(datetime.datetime.now(pytz.UTC))')"
+          echo "Start Date (2w ago): $(python -c 'import datetime, pytz; from datetime import timedelta; print(datetime.datetime.now(pytz.UTC) - timedelta(weeks=2))')"
 
-      - name: "Debug: List Enterprise Repositories"
+      - name: Debug: List Repositories
         env:
           ENTERPRISE_GH_URL: ${{ secrets.ENTERPRISE_GH_URL }}
           ENTERPRISE_GH_TOKEN: ${{ secrets.ENTERPRISE_GH_TOKEN }}
         run: |
-          python -c "exec(\"from github import Github\\nimport os\\norgs = ['Amplio','Amplio-Projects']\\nprint('Enterprise GH URL:', os.getenv('ENTERPRISE_GH_URL'))\\ng = Github(base_url=os.getenv('ENTERPRISE_GH_URL'), login_or_token=os.getenv('ENTERPRISE_GH_TOKEN'))\\nfor org_name in orgs:\\n    try:\\n        org = g.get_organization(org_name)\\n        print('\\nRepositories in {}:'.format(org_name))\\n        for repo in org.get_repos():\\n            print('  ', repo.full_name)\\n    except Exception as e:\\n        print('Error fetching {}:'.format(org_name), e)\\n\")"
+          cat <<'EOF' > list_repos.py
+from github import Github
+import os
+g = Github(base_url=os.getenv("ENTERPRISE_GH_URL"), login_or_token=os.getenv("ENTERPRISE_GH_TOKEN"))
+for org in ["Amplio", "Amplio-Projects"]:
+    print("Org:", org)
+    for repo in g.get_organization(org).get_repos():
+        print(repo.full_name)
+EOF
+          python list_repos.py
 
-      - name: "Debug: List Recent Commits for Allowed Emails"
+      - name: Debug: List Commits
         env:
           ENTERPRISE_GH_URL: ${{ secrets.ENTERPRISE_GH_URL }}
           ENTERPRISE_GH_TOKEN: ${{ secrets.ENTERPRISE_GH_TOKEN }}
         run: |
-          python -c "exec(\"from github import Github\\nimport os, datetime, pytz\\nallowed_emails = {'shaun.porwal@gmail.com', 'porwals@mskcc.org'}\\npast_delta = datetime.timedelta(weeks=2)\\nstart_date = datetime.datetime.now(pytz.UTC) - past_delta\\norgs = ['Amplio','Amplio-Projects']\\ng = Github(base_url=os.getenv('ENTERPRISE_GH_URL'), login_or_token=os.getenv('ENTERPRISE_GH_TOKEN'))\\nfor org_name in orgs:\\n    try:\\n        org = g.get_organization(org_name)\\n        print('\\nCommits in {} since {}:'.format(org_name, start_date))\\n        for repo in org.get_repos():\\n            try:\\n                commits = repo.get_commits(since=start_date)\\n                for commit in commits:\\n                    email = commit.commit.author.email.lower() if commit.commit.author.email else 'N/A'\\n                    if email in allowed_emails:\\n                        print('Repo: {} | Date: {} | Email: {}'.format(repo.full_name, commit.commit.author.date, email))\\n            except Exception as e:\\n                print('Error in repo {}:'.format(repo.full_name), e)\\n    except Exception as e:\\n        print('Error fetching {}:'.format(org_name), e)\\n\")"
+          cat <<'EOF' > list_commits.py
+from github import Github
+import os, datetime, pytz
+g = Github(base_url=os.getenv("ENTERPRISE_GH_URL"), login_or_token=os.getenv("ENTERPRISE_GH_TOKEN"))
+start = datetime.datetime.now(pytz.UTC) - datetime.timedelta(weeks=2)
+for org in ["Amplio", "Amplio-Projects"]:
+    print("Commits in org:", org)
+    for repo in g.get_organization(org).get_repos():
+        try:
+            for commit in repo.get_commits(since=start):
+                print(repo.full_name, commit.commit.author.date, commit.commit.author.email)
+        except Exception as e:
+            print("Error in repo", repo.full_name, e)
+EOF
+          python list_commits.py
 
       - name: Run commit summary script (verbose)
         env:
