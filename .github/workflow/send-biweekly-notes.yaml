@@ -1,0 +1,54 @@
+name: Commit Summary Email
+
+on:
+  # Runs every Wednesday at 9 AM UTC.
+  schedule:
+    - cron: '0 9 * * 3'
+  workflow_dispatch:
+
+jobs:
+  commit_summary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Sync uv project dependencies
+        run: uv sync
+        # If uv automatically handles dependency syncing, you can remove this step.
+
+      - name: Determine if today is a scheduled fortnight
+        id: schedule_check
+        shell: bash
+        run: |
+          # Reference date: 2025-02-19 (YYYY-MM-DD) – the first scheduled Wednesday
+          ref_date="2025-02-19"
+          current_date=$(date +%Y-%m-%d)
+          # Calculate the difference in days between current_date and reference date.
+          diff_days=$(( ( $(date -d "$current_date" +%s) - $(date -d "$ref_date" +%s) ) / 86400 ))
+          echo "Days difference: $diff_days"
+          # If difference modulo 14 is not 0 then this Wednesday is not on schedule.
+          if (( diff_days % 14 != 0 )); then
+            echo "This Wednesday ($current_date) is not scheduled for a summary. Skipping."
+            exit 78
+          fi
+          echo "This is a scheduled day for the commit summary."
+
+      - name: Run commit summary script
+        env:
+          # Set up necessary credentials via secrets. Adjust to your environment.
+          GITHUB_ACCESS_TOKEN: ${{ secrets.GITHUB_ACCESS_TOKEN }}
+          GITHUB_ENTERPRISE_URL: ${{ secrets.GITHUB_ENTERPRISE_URL }}
+          GITHUB_ENTERPRISE_ACCESS_TOKEN: ${{ secrets.GITHUB_ENTERPRISE_ACCESS_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GMAIL_EMAIL: ${{ secrets.GMAIL_EMAIL }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          # This command scans enterprise GitHub for user "porwals"
+          # and sends the email summary to shaun.porwal@gmail.com
+          uv run src/get_commit_summary.py -u porwals --enterprise -e shaun.porwal@gmail.com
