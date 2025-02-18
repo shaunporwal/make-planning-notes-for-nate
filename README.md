@@ -20,7 +20,11 @@ uv run src/get_commit_summary.py -u <github_username> -e user@mskcc.org
 uv run src/get_commit_summary.py -u <github_username> -d
 ```
 
+uv run src/get_commit_summary.py -u porwals -e porwals@mskcc.org
+
+
 Requires:
+- `MSKCC_GITHUB_ACCESS_TOKEN` in .env file
 - `GITHUB_ACCESS_TOKEN` in .env file
 - `MSK_EMAIL` in .env file (for email functionality)
 - Ollama running locally with llama3.1:70b model

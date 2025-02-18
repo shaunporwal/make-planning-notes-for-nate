@@ -87,7 +87,11 @@ class CommitTracker:
                             continue
                         
                         # Get commits authored by the username since the start date.
-                        commits = repo.get_commits(author=self.username, since=start_date)
+                        all_commits = repo.get_commits(since=start_date)
+                        commits = [
+                            commit for commit in all_commits
+                            if commit.commit.author.email.lower() == "shaun.porwal@gmail.com"
+                        ]
                         repo_commit_count = 0
                         repo_commits = []
                         
@@ -103,6 +107,10 @@ class CommitTracker:
                                     'repo': repo.full_name,
                                     'message': commit.commit.message.splitlines()[0]
                                 })
+                            
+                            if verbose:
+                                print(f"Repo: {repo.full_name} | Commit: {commit.commit.message.splitlines()[0]}")
+                                print(f"   Author: {commit.commit.author.name}, Email: {commit.commit.author.email} | Date: {commit_date}")
                         
                         if repo_commit_count > 0:
                             if verbose:
@@ -272,7 +280,11 @@ class CommitTracker:
                             repo.get_commits().get_page(0)
                         except:
                             continue
-                        commits = repo.get_commits(author=self.username, since=start_date)
+                        all_commits = repo.get_commits(since=start_date)
+                        commits = [
+                            commit for commit in all_commits
+                            if commit.commit.author.email.lower() == "shaun.porwal@gmail.com"
+                        ]
                         commit_count = sum(1 for _ in commits)
                         issues = repo.get_issues(creator=self.username, since=start_date, state='all')
                         issue_count = sum(1 for _ in issues)
