@@ -42,13 +42,13 @@ jobs:
       - name: Run commit summary script
         env:
           # Set up necessary credentials via secrets. Adjust to your environment.
-          GITHUB_ACCESS_TOKEN: ${{ secrets.GITHUB_ACCESS_TOKEN }}
-          GITHUB_ENTERPRISE_URL: ${{ secrets.GITHUB_ENTERPRISE_URL }}
-          GITHUB_ENTERPRISE_ACCESS_TOKEN: ${{ secrets.GITHUB_ENTERPRISE_ACCESS_TOKEN }}
+          PERSONAL_GH_TOKEN: ${{ secrets.PERSONAL_GH_TOKEN }}
+          ENTERPRISE_GH_URL: ${{ secrets.ENTERPRISE_GH_URL }}
+          ENTERPRISE_GH_TOKEN: ${{ secrets.ENTERPRISE_GH_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GMAIL_EMAIL: ${{ secrets.GMAIL_EMAIL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: |
           # This command scans enterprise GitHub for user "porwals"
           # and sends the email summary to shaun.porwal@gmail.com
-          uv run src/get_commit_summary.py -u porwals --enterprise -e shaun.porwal@gmail.com
+          uv run src/get_commit_summary.py -u porwals --enterprise -e porwals@mskcc.org aikenw@mskcc.org

@@ -33,13 +33,13 @@ class CommitTracker:
         """Initialize GitHub connection with error handling"""
         load_dotenv()
         if self.enterprise:
-            enterprise_url = os.getenv("GITHUB_ENTERPRISE_URL")
+            enterprise_url = os.getenv("ENTERPRISE_GH_URL")
             if enterprise_url in [None, "", "your.enterprise.github.api.url"]:
                 raise ValueError("Enterprise GitHub URL not configured correctly")
-            token = os.getenv("GITHUB_ENTERPRISE_ACCESS_TOKEN", os.getenv("GITHUB_ACCESS_TOKEN"))
+            token = os.getenv("ENTERPRISE_GH_TOKEN", os.getenv("PERSONAL_GH_TOKEN"))
         else:
             enterprise_url = None
-            token = os.getenv("GITHUB_ACCESS_TOKEN")
+            token = os.getenv("PERSONAL_GH_TOKEN")
         
         if not token:
             raise ValueError("No GitHub access token found in environment variables")
