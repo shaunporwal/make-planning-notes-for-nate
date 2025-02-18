@@ -44,6 +44,51 @@ jobs:
           echo "Allowed commit emails: shaun.porwal@gmail.com, porwals@mskcc.org"
           echo "Enterprise mode organizations: Amplio, Amplio-Projects"
 
+      - name: "Debug: List Enterprise Repositories"
+        env:
+          ENTERPRISE_GH_URL: ${{ secrets.ENTERPRISE_GH_URL }}
+          ENTERPRISE_GH_TOKEN: ${{ secrets.ENTERPRISE_GH_TOKEN }}
+        run: |
+          python -c "from github import Github; import os; 
+orgs = ['Amplio', 'Amplio-Projects'];
+print('Enterprise GH URL:', os.getenv('ENTERPRISE_GH_URL'));
+g = Github(base_url=os.getenv('ENTERPRISE_GH_URL'), login_or_token=os.getenv('ENTERPRISE_GH_TOKEN'));
+for org_name in orgs:
+    try:
+        org = g.get_organization(org_name)
+        print(f'\nRepositories in {org_name}:')
+        for repo in org.get_repos():
+            print('  ', repo.full_name)
+    except Exception as e:
+        print(f'Error fetching {org_name}:', e)"
+      
+      - name: "Debug: List Recent Commits for Allowed Emails"
+        env:
+          ENTERPRISE_GH_URL: ${{ secrets.ENTERPRISE_GH_URL }}
+          ENTERPRISE_GH_TOKEN: ${{ secrets.ENTERPRISE_GH_TOKEN }}
+        run: |
+          python -c "from github import Github; import os; import datetime, pytz; 
+allowed_emails = { 'shaun.porwal@gmail.com', 'porwals@mskcc.org' };
+past_delta = datetime.timedelta(weeks=2);
+start_date = datetime.datetime.now(pytz.UTC) - past_delta;
+orgs = ['Amplio', 'Amplio-Projects'];
+g = Github(base_url=os.getenv('ENTERPRISE_GH_URL'), login_or_token=os.getenv('ENTERPRISE_GH_TOKEN'));
+for org_name in orgs:
+    try:
+        org = g.get_organization(org_name);
+        print(f'\nCommits in {org_name} since {start_date}:');
+        for repo in org.get_repos():
+            try:
+                commits = repo.get_commits(since=start_date);
+                for commit in commits:
+                    email = commit.commit.author.email.lower() if commit.commit.author.email else 'N/A';
+                    if email in allowed_emails:
+                        print(f\"Repo: {repo.full_name} | Date: {commit.commit.author.date} | Email: {email}\");
+            except Exception as e:
+                print(f'Error in repo {repo.full_name}:', e);
+    except Exception as e:
+        print(f'Error fetching {org_name}:', e)";
+      
       - name: Run commit summary script (verbose)
         env:
           PERSONAL_GH_TOKEN: ${{ secrets.PERSONAL_GH_TOKEN }}
