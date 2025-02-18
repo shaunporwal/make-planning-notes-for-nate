@@ -47,14 +47,14 @@ jobs:
           ENTERPRISE_GH_TOKEN: ${{ secrets.ENTERPRISE_GH_TOKEN }}
         run: |
           cat <<'EOF' > list_repos.py
-from github import Github
-import os
-g = Github(base_url=os.getenv("ENTERPRISE_GH_URL"), login_or_token=os.getenv("ENTERPRISE_GH_TOKEN"))
-for org in ["Amplio", "Amplio-Projects"]:
-    print("Org:", org)
-    for repo in g.get_organization(org).get_repos():
-        print(repo.full_name)
-EOF
+          from github import Github
+          import os
+          g = Github(base_url=os.getenv("ENTERPRISE_GH_URL"), login_or_token=os.getenv("ENTERPRISE_GH_TOKEN"))
+          for org in ["Amplio", "Amplio-Projects"]:
+              print("Org:", org)
+              for repo in g.get_organization(org).get_repos():
+                  print(repo.full_name)
+          EOF
           python list_repos.py
 
       - name: Debug: List Commits
@@ -63,19 +63,19 @@ EOF
           ENTERPRISE_GH_TOKEN: ${{ secrets.ENTERPRISE_GH_TOKEN }}
         run: |
           cat <<'EOF' > list_commits.py
-from github import Github
-import os, datetime, pytz
-g = Github(base_url=os.getenv("ENTERPRISE_GH_URL"), login_or_token=os.getenv("ENTERPRISE_GH_TOKEN"))
-start = datetime.datetime.now(pytz.UTC) - datetime.timedelta(weeks=2)
-for org in ["Amplio", "Amplio-Projects"]:
-    print("Commits in org:", org)
-    for repo in g.get_organization(org).get_repos():
-        try:
-            for commit in repo.get_commits(since=start):
-                print(repo.full_name, commit.commit.author.date, commit.commit.author.email)
-        except Exception as e:
-            print("Error in repo", repo.full_name, e)
-EOF
+          from github import Github
+          import os, datetime, pytz
+          g = Github(base_url=os.getenv("ENTERPRISE_GH_URL"), login_or_token=os.getenv("ENTERPRISE_GH_TOKEN"))
+          start = datetime.datetime.now(pytz.UTC) - datetime.timedelta(weeks=2)
+          for org in ["Amplio", "Amplio-Projects"]:
+              print("Commits in org:", org)
+              for repo in g.get_organization(org).get_repos():
+                  try:
+                      for commit in repo.get_commits(since=start):
+                          print(repo.full_name, commit.commit.author.date, commit.commit.author.email)
+                  except Exception as e:
+                      print("Error in repo", repo.full_name, e)
+          EOF
           python list_commits.py
 
       - name: Run commit summary script (verbose)
