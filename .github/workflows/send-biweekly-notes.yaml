@@ -37,7 +37,14 @@ jobs:
           fi
           echo "This is a scheduled day for the commit summary."
 
-      - name: Run commit summary script
+      - name: Debug: Print Time Window and Environment Info
+        run: |
+          echo "Current UTC Time: $(python -c 'import datetime, pytz; print(datetime.datetime.now(pytz.UTC))')"
+          echo "Computed Start Date (2 weeks ago): $(python -c 'import datetime, pytz; from datetime import timedelta; print(datetime.datetime.now(pytz.UTC) - timedelta(weeks=2))')"
+          echo "Allowed commit emails: shaun.porwal@gmail.com, porwals@mskcc.org"
+          echo "Enterprise mode organizations: Amplio, Amplio-Projects"
+
+      - name: Run commit summary script (verbose)
         env:
           PERSONAL_GH_TOKEN: ${{ secrets.PERSONAL_GH_TOKEN }}
           ENTERPRISE_GH_URL: ${{ secrets.ENTERPRISE_GH_URL }}
@@ -45,4 +52,4 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GMAIL_EMAIL: ${{ secrets.GMAIL_EMAIL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-        run: uv run src/get_commit_summary.py -u porwals --enterprise -e porwals@mskcc.org
+        run: uv run src/get_commit_summary.py -u porwals --enterprise -e porwals@mskcc.org -v
