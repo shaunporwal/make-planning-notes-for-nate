@@ -12,21 +12,23 @@ import socket
 import re
 
 # Load .env from the parent directory (adjust as needed)
-dotenv_path = os.path.join(os.path.dirname(__file__), '../.env')
+dotenv_path = os.path.join(os.path.dirname(__file__), "../.env")
 load_dotenv(dotenv_path)
+
 
 def parse_time_delta(duration_str: str) -> timedelta:
     """
     Convert a duration string into a timedelta.
     Supported units:
-      s - seconds
-      m - minutes
-      h - hours
-      d - days (or no unit)
-      w - weeks
-      y - years (assumed to be 365 days)
+        s - seconds
+        m - minutes
+        h - hours
+        d - days (or no unit)
+        w - weeks
+        y - years (assumed to be 365 days)
     For example: "2w" returns a timedelta of 2 weeks.
     """
+    
     duration_str = duration_str.strip().lower()
     pattern = r"^(\d+(?:\.\d+)?)([smhdwy]?)$"
     match = re.match(pattern, duration_str)
@@ -49,134 +51,47 @@ def parse_time_delta(duration_str: str) -> timedelta:
     else:
         raise ValueError(f"Unsupported time unit: {unit}")
 
+
 class CommitTracker:
-    def __init__(self, username, orgs=None, enterprise=False):
+    def __init__(self, username):
         # Load environment variables
         load_dotenv()
+        token = os.getenv("PERSONAL_GH_TOKEN")
         self.username = username
-        self.enterprise = enterprise
-        if orgs is not None:
-            self.orgs = orgs
-        else:
-            # If enterprise is enabled, use the enterprise orgs; otherwise, use personal orgs.
-            if self.enterprise:
-                self.orgs = ["Amplio", "Amplio-Projects"]
-            else:
-                self.orgs = [username, "juntotechnologies"]
-        self.github = self._initialize_github()
+        self.github = self._initialize_github(token)
 
-    def _initialize_github(self):
+    def _initialize_github(self, token):
         """Initialize GitHub connection with error handling"""
-        load_dotenv()
-        if self.enterprise:
-            enterprise_url = os.getenv("ENTERPRISE_GH_URL")
-            if enterprise_url in [None, "", "your.enterprise.github.api.url"]:
-                raise ValueError("Enterprise GitHub URL not configured correctly")
-            token = os.getenv("ENTERPRISE_GH_TOKEN", os.getenv("PERSONAL_GH_TOKEN"))
-        else:
-            enterprise_url = None
-            token = os.getenv("PERSONAL_GH_TOKEN")
-        
-        if not token:
-            raise ValueError("No GitHub access token found in environment variables")
-        
-        try:
-            if self.enterprise:
-                g = Github(base_url=enterprise_url, login_or_token=token)
-            else:
-                g = Github(token)
-            # Test the connection
-            g.get_user()
-            return g
-        except Exception as e:
-            raise ConnectionError(f"Failed to connect to GitHub: {str(e)}")
+        g = Github(login_or_token=token)
+        g.get_user(self.username)
+        return g
 
-    def get_activity(self, past_delta: timedelta, verbose=False):
+    def get_activity(self):
         """Get all GitHub activity from the specified time offset until now"""
-        start_date = datetime.now(pytz.UTC) - past_delta
+
+
+        repos = self.github.get_repos()
+
         all_activity = []
-        
-        if verbose:
-            print(f"\n=== Fetching Activity Since {start_date.strftime('%Y-%m-%d')} ===")
-        
-        for org_name in self.orgs:
-            try:
-                # If the org name matches the username then retrieve user repos.
-                if org_name.lower() == self.username.lower():
-                    entity = self.github.get_user(org_name)
-                else:
-                    entity = self.github.get_organization(org_name)
-                repos = entity.get_repos()
-                
-                for repo in repos:
-                    try:
-                        # Skip empty repositories silently
-                        try:
-                            repo.get_commits().get_page(0)
-                        except Exception:
-                            continue
-                        
-                        # Get commits since the start date.
-                        all_commits = repo.get_commits(since=start_date)
-                        commit_emails = {"shaun.porwal@gmail.com", "porwals@mskcc.org"}  # allowed emails
-                        commits = [
-                            commit for commit in all_commits
-                            if commit.commit.author.email and commit.commit.author.email.lower() in commit_emails
-                        ]
-                        repo_commit_count = 0
-                        repo_commits = []
-                        
-                        for commit in commits:
-                            commit_date = commit.commit.author.date
-                            if commit_date.tzinfo is None:
-                                commit_date = pytz.UTC.localize(commit_date)
-                            
-                            if commit_date >= start_date:
-                                repo_commit_count += 1
-                                repo_commits.append({
-                                    'date': commit_date,
-                                    'repo': repo.full_name,
-                                    'message': commit.commit.message.splitlines()[0]
-                                })
-                            
-                            if verbose:
-                                print(f"Repo: {repo.full_name} | Commit: {commit.commit.message.splitlines()[0]}")
-                                print(f"   Author: {commit.commit.author.name}, Email: {commit.commit.author.email} | Date: {commit_date}")
-                        
-                        if repo_commit_count > 0:
-                            if verbose:
-                                print(f"\nRepository: {repo.full_name}")
-                                print(f"Found {repo_commit_count} commits")
-                            all_activity.extend(repo_commits)
-                            
-                    except Exception as e:
-                        if verbose:
-                            print(f"Error accessing {repo.full_name}: {str(e)}")
-                        continue
-                        
-            except Exception as e:
-                if verbose:
-                    print(f"Error accessing organization/account {org_name}: {str(e)}")
-                continue
-        
-        if not all_activity and verbose:
-            print("\nNo activity found in the specified time period.")
-            
-        return self._format_activity(all_activity)
+
+
+        return repos
+
+
 
     def _format_activity(self, commits):
         """Format commits by date for easy reporting"""
-        commits.sort(key=lambda x: x['date'], reverse=True)
+        commits.sort(key=lambda x: x["date"], reverse=True)
         formatted_output = []
         current_date = None
-        
+
         for commit in commits:
-            commit_date = commit['date'].strftime('%Y-%m-%d')
+            commit_date = commit["date"].strftime("%Y-%m-%d")
             if commit_date != current_date:
                 current_date = commit_date
                 formatted_output.append(f"\n=== {commit_date} ===")
             formatted_output.append(f"[{commit['repo']}] {commit['message']}")
-        
+
         return formatted_output
 
     def generate_commit_summary(self, past_delta: timedelta, future_delta: timedelta):
@@ -224,9 +139,9 @@ class CommitTracker:
                 f"Commit messages:\n{commit_text}"
             )
             response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[{'role': 'user', 'content': instruction}],
-                temperature=0.7
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": instruction}],
+                temperature=0.7,
             )
             summary = response.choices[0].message.content
             return summary.strip()
@@ -234,16 +149,16 @@ class CommitTracker:
             print(f"Error generating commit summary: {str(e)}")
             return "Error generating summary."
 
-    def send_email(self, stats_text, summary_text, recipients=None):
+    def send_email(self, summary_text, recipients=None):
         """Send the commit summary via email."""
         if not recipients:
             raise ValueError("No recipients specified")
 
         def create_msg(sender, recipient_list):
             msg = MIMEText(summary_text)
-            msg['Subject'] = f"Activity Update - {datetime.now().strftime('%Y-%m-%d')}"
-            msg['From'] = sender
-            msg['To'] = ", ".join(recipient_list)
+            msg["Subject"] = f"Activity Update - {datetime.now().strftime('%Y-%m-%d')}"
+            msg["From"] = sender
+            msg["To"] = ", ".join(recipient_list)
             return msg
 
         # Always send emails from Gmail.
@@ -255,7 +170,7 @@ class CommitTracker:
 
         msg = create_msg(gmail_email, recipients)
         try:
-            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
                 server.login(gmail_email, gmail_password)
                 server.send_message(msg)
                 print(f"Email sent to: {msg['To']}")
@@ -264,118 +179,71 @@ class CommitTracker:
             print(f"Error sending email: {str(e)}")
             return False
 
-    def get_detailed_stats(self, past_delta: timedelta):
-        """Get detailed statistics for each organization and repository."""
-        start_date = datetime.now(pytz.UTC) - past_delta
-        stats = {}
-        for org_name in self.orgs:
-            try:
-                if org_name.lower() == self.username.lower():
-                    entity = self.github.get_user(org_name)
-                else:
-                    entity = self.github.get_organization(org_name)
-                stats[org_name] = {
-                    'repos': {},
-                    'total_commits': 0,
-                    'total_issues': 0,
-                    'total_comments': 0
-                }
-                for repo in entity.get_repos():
-                    try:
-                        try:
-                            repo.get_commits().get_page(0)
-                        except:
-                            continue
-                        all_commits = repo.get_commits(since=start_date)
-                        commit_emails = {"shaun.porwal@gmail.com", "porwals@mskcc.org"}
-                        commits = [
-                            commit for commit in all_commits
-                            if commit.commit.author.email and commit.commit.author.email.lower() in commit_emails
-                        ]
-                        commit_count = sum(1 for _ in commits)
-                        issues = repo.get_issues(creator=self.username, since=start_date, state='all')
-                        issue_count = sum(1 for _ in issues)
-                        issues = repo.get_issues(creator=self.username, since=start_date, state='all')
-                        comment_count = sum(
-                            1 for issue in issues 
-                            for comment in issue.get_comments() 
-                            if comment.user.login == self.username and comment.created_at >= start_date
-                        )
-                        if commit_count + issue_count + comment_count > 0:
-                            stats[org_name]['repos'][repo.name] = {
-                                'commits': commit_count,
-                                'issues': issue_count,
-                                'comments': comment_count
-                            }
-                            stats[org_name]['total_commits'] += commit_count
-                            stats[org_name]['total_issues'] += issue_count
-                            stats[org_name]['total_comments'] += comment_count
-                    except:
-                        continue
-            except:
-                continue
-        return stats
-
-    def format_stats_report(self, stats, past_delta: timedelta):
-        """Format statistics into a concise text format."""
-        end_date = datetime.now()
-        start_date = end_date - past_delta
-        date_range = f"({start_date.strftime('%m/%d/%y')}–{end_date.strftime('%m/%d/%y')})"
-        output = [f"Activity Report {date_range}\n"]
-        active_repos = []
-        total_commits = 0
-        total_issues = 0
-        total_comments = 0
-        for org_name, org_data in stats.items():
-            for repo_name, repo_data in org_data['repos'].items():
-                if repo_data['commits'] + repo_data['issues'] + repo_data['comments'] > 0:
-                    active_repos.append(f"{org_name}/{repo_name}")
-                    total_commits += repo_data['commits']
-                    total_issues += repo_data['issues']
-                    total_comments += repo_data['comments']
-        if active_repos:
-            output.append("Active Repositories:\n")
-            output.extend(active_repos)
-            output.append(f"\nActivity Totals:\n")
-            output.append(f"Commits: {total_commits}")
-            output.append(f"Issues: {total_issues}")
-            output.append(f"Comments: {total_comments}")
-            output.append(f"Total Activity: {total_commits + total_issues + total_comments}")
-        else:
-            output.append("\nNo activity found in the specified time period.")
-        return "\n".join(output)
 
 def main():
     try:
-        parser = argparse.ArgumentParser(description='Track GitHub commits and generate summaries')
-        parser.add_argument('-u', '--username', required=True, help='GitHub username to track')
-        parser.add_argument('-tp', '--time_past', type=str, default="2w",
-                            help="Time offset for past activity, e.g., '2w', '14d', '1y'. Default: 2w")
-        parser.add_argument('-tf', '--time_future', type=str, default="2w",
-                            help="Time offset for future activity, e.g., '2w', '10d', '1y'. Default: 2w")
-        parser.add_argument('-e', '--email', nargs='+', help='Email recipients (optional)')
-        parser.add_argument('-v', '--verbose', action='store_true', help='Show detailed output')
-        parser.add_argument('-d', '--display', action='store_true', help='Display activity table and summary in console')
-        parser.add_argument('--enterprise', action='store_true', help='Scan enterprise GitHub (MSKCC) for commits')
+        parser = argparse.ArgumentParser(
+            description="Track GitHub commits and generate summaries"
+        )
+        parser.add_argument(
+            "-u", "--username", required=True, help="GitHub username to track"
+        )
+        parser.add_argument(
+            "-tp",
+            "--time_past",
+            type=str,
+            default="2w",
+            help="Time offset for past activity, e.g., '2w', '14d', '1y'. Default: 2w",
+        )
+        parser.add_argument(
+            "-tf",
+            "--time_future",
+            type=str,
+            default="2w",
+            help="Time offset for future activity, e.g., '2w', '10d', '1y'. Default: 2w",
+        )
+        parser.add_argument(
+            "-e", "--email", nargs="+", help="Email recipients (optional)"
+        )
+        parser.add_argument(
+            "-v", "--verbose", action="store_true", help="Show detailed output"
+        )
+        parser.add_argument(
+            "-d",
+            "--display",
+            action="store_true",
+            help="Display summary in console",
+        )
         args = parser.parse_args()
 
         past_offset = parse_time_delta(args.time_past)
         future_offset = parse_time_delta(args.time_future)
 
-        tracker = CommitTracker(username=args.username, enterprise=args.enterprise)
-        stats = tracker.get_detailed_stats(past_delta=past_offset)
-        stats_text = tracker.format_stats_report(stats, past_delta=past_offset)
-        summary = tracker.generate_commit_summary(past_delta=past_offset, future_delta=future_offset)
+        tracker = CommitTracker(username=args.username)
+        summary = tracker.generate_commit_summary(
+            past_delta=past_offset, future_delta=future_offset
+        )
         if args.email:
-            tracker.send_email(stats_text, summary, args.email)
+            tracker.send_email(summary, args.email)
         if args.display:
-            print("\n=== Activity Statistics ===")
-            print(stats_text)
             print("\n=== Detailed Summary ===")
             print(summary)
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         sys.exit(1)
 
+
 if __name__ == "__main__":
     main()
+
+    print('--------------------------------')
+
+    from datetime import timedelta
+
+    tracker = CommitTracker(username="porwals")
+    activity = tracker.get_activity(past_delta=timedelta(weeks=2), verbose=True)
+    print("\n".join(activity))
+
+    
+
+

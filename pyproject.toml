@@ -11,3 +11,8 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "pytz>=2025.1",
 ]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+]
