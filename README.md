@@ -18,10 +18,10 @@ uv run src/get_commit_summary.py -u <github_username> -e user@mskcc.org
 
 # Display summary in console
 uv run src/get_commit_summary.py -u <github_username> -d
-```
 
+# Run for Shaun
 uv run src/get_commit_summary.py -u porwals -e porwals@mskcc.org
-
+```
 
 Requires:
 - `MSKCC_GITHUB_ACCESS_TOKEN` in .env file

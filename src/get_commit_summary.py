@@ -10,6 +10,9 @@ import smtplib
 from email.mime.text import MIMEText
 import socket
 
+dotenv_path = os.path.join(os.path.dirname(__file__), '../.env')  # adjust as needed
+load_dotenv(dotenv_path)
+
 class CommitTracker:
     def __init__(self, username, orgs=None):
         # Load environment variables
