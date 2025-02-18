@@ -39,8 +39,8 @@ jobs:
 
       - name: "Debug: Print Time Window and Environment Info"
         run: |
-          echo "Current UTC Time: $(python -c \"import datetime, pytz; print(datetime.datetime.now(pytz.UTC))\")"
-          echo "Computed Start Date (2 weeks ago): $(python -c \"import datetime, pytz; from datetime import timedelta; print(datetime.datetime.now(pytz.UTC) - timedelta(weeks=2))\")"
+          echo "Current UTC Time: $(python -c 'import datetime, pytz; print(datetime.datetime.now(pytz.UTC))')"
+          echo "Computed Start Date (2 weeks ago): $(python -c 'import datetime, pytz; from datetime import timedelta; print(datetime.datetime.now(pytz.UTC) - timedelta(weeks=2))')"
           echo "Allowed commit emails: shaun.porwal@gmail.com, porwals@mskcc.org"
           echo "Enterprise mode organizations: Amplio, Amplio-Projects"
 
