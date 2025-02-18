@@ -358,7 +358,7 @@ def main():
         summary = tracker.generate_commit_summary(weeks_past=args.weeks_past, weeks_future=args.weeks_future)
         if args.email:
             tracker.send_email(stats_text, summary, args.email)
-        elif args.display:
+        if args.display:
             print("\n=== Activity Statistics ===")
             print(stats_text)
             print("\n=== Detailed Summary ===")
