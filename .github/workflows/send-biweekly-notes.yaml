@@ -51,4 +51,4 @@ jobs:
         run: |
           # This command scans enterprise GitHub for user "porwals"
           # and sends the email summary to shaun.porwal@gmail.com
-          uv run src/get_commit_summary.py -u porwals --enterprise -e porwals@mskcc.org aikenw@mskcc.org
+          uv run src/get_commit_summary.py -u porwals --enterprise -e porwals@mskcc.org
