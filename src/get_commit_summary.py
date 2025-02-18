@@ -9,9 +9,45 @@ import argparse
 import smtplib
 from email.mime.text import MIMEText
 import socket
+import re
 
-dotenv_path = os.path.join(os.path.dirname(__file__), '../.env')  # adjust as needed
+# Load .env from the parent directory (adjust as needed)
+dotenv_path = os.path.join(os.path.dirname(__file__), '../.env')
 load_dotenv(dotenv_path)
+
+def parse_time_delta(duration_str: str) -> timedelta:
+    """
+    Convert a duration string into a timedelta.
+    Supported units:
+      s - seconds
+      m - minutes
+      h - hours
+      d - days (or no unit)
+      w - weeks
+      y - years (assumed to be 365 days)
+    For example: "2w" returns a timedelta of 2 weeks.
+    """
+    duration_str = duration_str.strip().lower()
+    pattern = r"^(\d+(?:\.\d+)?)([smhdwy]?)$"
+    match = re.match(pattern, duration_str)
+    if not match:
+        raise ValueError(f"Invalid time duration format: {duration_str}")
+    value, unit = match.groups()
+    value = float(value)
+    if unit == "s":
+        return timedelta(seconds=value)
+    elif unit == "m":
+        return timedelta(minutes=value)
+    elif unit == "h":
+        return timedelta(hours=value)
+    elif unit == "d" or unit == "":
+        return timedelta(days=value)
+    elif unit == "w":
+        return timedelta(weeks=value)
+    elif unit == "y":
+        return timedelta(days=value * 365)
+    else:
+        raise ValueError(f"Unsupported time unit: {unit}")
 
 class CommitTracker:
     def __init__(self, username, orgs=None, enterprise=False):
@@ -55,9 +91,9 @@ class CommitTracker:
         except Exception as e:
             raise ConnectionError(f"Failed to connect to GitHub: {str(e)}")
 
-    def get_activity(self, weeks_back=2, verbose=False):
-        """Get all GitHub activity from specified weeks back until now"""
-        start_date = datetime.now(pytz.UTC) - timedelta(weeks=weeks_back)
+    def get_activity(self, past_delta: timedelta, verbose=False):
+        """Get all GitHub activity from the specified time offset until now"""
+        start_date = datetime.now(pytz.UTC) - past_delta
         all_activity = []
         
         if verbose:
@@ -80,12 +116,12 @@ class CommitTracker:
                         except Exception:
                             continue
                         
-                        # Get commits authored by the username since the start date.
+                        # Get commits since the start date.
                         all_commits = repo.get_commits(since=start_date)
-                        commit_emails = {"shaun.porwal@gmail.com", "porwals@mskcc.org"}  # set of allowed emails
+                        commit_emails = {"shaun.porwal@gmail.com", "porwals@mskcc.org"}  # allowed emails
                         commits = [
                             commit for commit in all_commits
-                            if commit.commit.author.email.lower() in commit_emails
+                            if commit.commit.author.email and commit.commit.author.email.lower() in commit_emails
                         ]
                         repo_commit_count = 0
                         repo_commits = []
@@ -143,16 +179,16 @@ class CommitTracker:
         
         return formatted_output
 
-    def generate_commit_summary(self, weeks_past=2, weeks_future=2):
+    def generate_commit_summary(self, past_delta: timedelta, future_delta: timedelta):
         """Generate a bulleted summary of commits using OpenAI."""
         try:
-            commits = self.get_activity(weeks_back=weeks_past)
+            commits = self.get_activity(past_delta, verbose=False)
             if not commits:
                 return "No commits found in the specified time period."
             commit_text = "\n".join(commits)
             end_date = datetime.now()
-            start_date = end_date - timedelta(weeks=weeks_past)
-            next_period_end = end_date + timedelta(weeks=weeks_future)
+            start_date = end_date - past_delta
+            next_period_end = end_date + future_delta
             client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             instruction = (
                 "You are a technical writer. Based on the following git commit messages, "
@@ -160,10 +196,10 @@ class CommitTracker:
                 "and focus on the key technical updates. For the next period section, please "
                 "look for clues in the past commits on what is coming up next. Don't mention past "
                 "commits or past work or use the words potential or possible. Format exactly like this example. "
-                "Condense the points from the commits, mentioning the high level changes only. Always condense"
-                " to no more than 5 points per project always no matter what if there are more than 5. For the "
-                "Next Period section, please use language like likely or may or potential or possible to"
-                " suggest that something is coming up or might happen:\n\n"
+                "Condense the points from the commits, mentioning the high level changes only. Always condense "
+                "to no more than 5 points per project even if there are more than 5. For the "
+                "Next Period section, please use language like likely or may or potential or possible to "
+                "suggest that something is coming up or might happen:\n\n"
                 "-------------------------------------------\n"
                 "Past Period (MM/DD/YY–MM/DD/YY)\n"
                 "-------------------------------------------\n\n"
@@ -210,7 +246,7 @@ class CommitTracker:
             msg['To'] = ", ".join(recipient_list)
             return msg
 
-        # Always send emails from Gmail regardless of recipient domain.
+        # Always send emails from Gmail.
         gmail_email = os.getenv("GMAIL_EMAIL")
         gmail_password = os.getenv("GMAIL_APP_PASSWORD")
         if not gmail_email or not gmail_password:
@@ -228,9 +264,9 @@ class CommitTracker:
             print(f"Error sending email: {str(e)}")
             return False
 
-    def get_detailed_stats(self, weeks_back=2):
+    def get_detailed_stats(self, past_delta: timedelta):
         """Get detailed statistics for each organization and repository."""
-        start_date = datetime.now(pytz.UTC) - timedelta(weeks=weeks_back)
+        start_date = datetime.now(pytz.UTC) - past_delta
         stats = {}
         for org_name in self.orgs:
             try:
@@ -251,10 +287,10 @@ class CommitTracker:
                         except:
                             continue
                         all_commits = repo.get_commits(since=start_date)
-                        commit_emails = {"shaun.porwal@gmail.com", "porwals@mskcc.org"}  # set of allowed emails
+                        commit_emails = {"shaun.porwal@gmail.com", "porwals@mskcc.org"}
                         commits = [
                             commit for commit in all_commits
-                            if commit.commit.author.email.lower() in commit_emails
+                            if commit.commit.author.email and commit.commit.author.email.lower() in commit_emails
                         ]
                         commit_count = sum(1 for _ in commits)
                         issues = repo.get_issues(creator=self.username, since=start_date, state='all')
@@ -280,11 +316,10 @@ class CommitTracker:
                 continue
         return stats
 
-    def format_stats_report(self, stats, weeks_back=2):
+    def format_stats_report(self, stats, past_delta: timedelta):
         """Format statistics into a concise text format."""
-        from datetime import datetime, timedelta
         end_date = datetime.now()
-        start_date = end_date - timedelta(weeks=weeks_back)
+        start_date = end_date - past_delta
         date_range = f"({start_date.strftime('%m/%d/%y')}–{end_date.strftime('%m/%d/%y')})"
         output = [f"Activity Report {date_range}\n"]
         active_repos = []
@@ -314,17 +349,23 @@ def main():
     try:
         parser = argparse.ArgumentParser(description='Track GitHub commits and generate summaries')
         parser.add_argument('-u', '--username', required=True, help='GitHub username to track')
-        parser.add_argument('-wp', '--weeks_past', type=int, default=2, help='Number of weeks to look back (default: 2)')
-        parser.add_argument('-wf', '--weeks_future', type=int, default=2, help='Number of weeks to look forward (default: 2)')
+        parser.add_argument('-tp', '--time_past', type=str, default="2w",
+                            help="Time offset for past activity, e.g., '2w', '14d', '1y'. Default: 2w")
+        parser.add_argument('-tf', '--time_future', type=str, default="2w",
+                            help="Time offset for future activity, e.g., '2w', '10d', '1y'. Default: 2w")
         parser.add_argument('-e', '--email', nargs='+', help='Email recipients (optional)')
         parser.add_argument('-v', '--verbose', action='store_true', help='Show detailed output')
         parser.add_argument('-d', '--display', action='store_true', help='Display activity table and summary in console')
         parser.add_argument('--enterprise', action='store_true', help='Scan enterprise GitHub (MSKCC) for commits')
         args = parser.parse_args()
+
+        past_offset = parse_time_delta(args.time_past)
+        future_offset = parse_time_delta(args.time_future)
+
         tracker = CommitTracker(username=args.username, enterprise=args.enterprise)
-        stats = tracker.get_detailed_stats(weeks_back=args.weeks_past)
-        stats_text = tracker.format_stats_report(stats, weeks_back=args.weeks_past)
-        summary = tracker.generate_commit_summary(weeks_past=args.weeks_past, weeks_future=args.weeks_future)
+        stats = tracker.get_detailed_stats(past_delta=past_offset)
+        stats_text = tracker.format_stats_report(stats, past_delta=past_offset)
+        summary = tracker.generate_commit_summary(past_delta=past_offset, future_delta=future_offset)
         if args.email:
             tracker.send_email(stats_text, summary, args.email)
         if args.display:
