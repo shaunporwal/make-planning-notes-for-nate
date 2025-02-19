@@ -23,4 +23,4 @@ uv run src/get_python_commits.py -u <github_username> -d
 Requires:
 - `GITHUB_ACCESS_TOKEN` in .env file
 - `MSK_EMAIL` in .env file (for email functionality)
-- Ollama running locally with llama3.1:70b model
+- Ollama running locally with llama3.1:70b model or openai api key in .env file.
