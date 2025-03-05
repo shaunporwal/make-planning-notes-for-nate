@@ -6,9 +6,27 @@
 # Get the absolute path of the script directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# Load environment variables if .env file exists
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    # Source the .env file content safely
+    set -a
+    source "$SCRIPT_DIR/.env"
+    set +a
+
+    # Use environment variables or default values
+    USERNAME="${EMAIL_USERNAME:-$USER}"
+    EMAIL="${MSK_EMAIL:-$EMAIL_ADDRESS}"
+else
+    echo "Warning: .env file not found. Using default values."
+    # Use system username as fallback
+    USERNAME="$USER"
+    # Prompt for email if not found
+    if [ -z "$EMAIL" ]; then
+        read -p "Enter your email address: " EMAIL
+    fi
+fi
+
 # Define the command to run
-USERNAME="porwals"
-EMAIL="porwals@mskcc.org"
 COMMAND="cd $SCRIPT_DIR && uv run src/get_commit_summary.py -u $USERNAME -e $EMAIL"
 
 # Create a temporary file for the crontab

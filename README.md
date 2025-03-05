@@ -2,6 +2,40 @@
 
 Nate asks for planning notes every 2 weeks usually, and this is an attempt to address my forgetfulness in getting them to him in a timely manner.
 
+## Workflow
+
+```mermaid
+flowchart TD
+  A[GitHub Commits] --> B[Run get_commit_summary.py]
+  B --> L["LLM Implementation (OpenAI API using gpt-4)"]
+  L --> C{Summary Output}
+  C -->|Email Summary| D[Send Email Summary]
+  C -->|Console Display| E[Show Summary in Console]
+  subgraph Scheduling Job
+    F[schedule_commit_summary.sh]
+    F --> G["Cron Job (Every 2 Weeks, Wed 9am EST)"]
+    G --> B
+  end
+```
+
+## Setup
+
+### Environment Variables
+
+This application requires several environment variables to function properly:
+
+1. Copy the template file to create your local environment file:
+```bash
+cp .env.template .env
+```
+
+2. Edit the `.env` file and add your credentials:
+   - `GITHUB_ACCESS_TOKEN`: Your GitHub personal access token
+   - `OPENAI_API_KEY`: Your OpenAI API key for GPT-4 access
+   - Email credentials for sending summaries
+
+**SECURITY NOTE**: The `.env` file contains sensitive information and is excluded from version control via `.gitignore`. Never commit this file to the repository.
+
 ## Usage
 
 Generate activity summaries from GitHub commits:
