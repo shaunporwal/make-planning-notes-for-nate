@@ -43,7 +43,7 @@ if grep -q "get_commit_summary.py -u $USERNAME" "$TEMP_CRONTAB"; then
 fi
 
 # Add the new job to run every 2 weeks at 9am on Wednesday EST
-echo "0 9 * * 3 [ \$((\$(date +\\%s) / 604800 % 2)) -eq 0 ] && $COMMAND" >> "$TEMP_CRONTAB"
+echo "0 9 * * 3 [ \$((\$(date +\\%s) / 604800 % 2)) -eq 1 ] && $COMMAND" >> "$TEMP_CRONTAB"
 
 # Install the new crontab
 crontab "$TEMP_CRONTAB"
